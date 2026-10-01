@@ -41,6 +41,30 @@ const login = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
+const socialLogin = catchAsync(async (req: Request, res: Response) => {
+  const { accessToken, refreshToken } = await AuthService.socialLogin(req.body);
+  
+  res.cookie("accessToken", accessToken, {
+    httpOnly: true,
+    secure: true,
+    sameSite: "none",
+    maxAge: 1000 * 60 * 60 * 24, 
+  });
+  res.cookie("refreshToken", refreshToken, {
+    httpOnly: true,
+    secure: true,
+    sameSite: "none",
+    maxAge: 1000 * 60 * 60 * 24 * 7, 
+  });
+
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: "Login successful",
+    data: { accessToken, refreshToken },
+  });
+});
+
 const logout = catchAsync(async (req: Request, res: Response) => {
   res.clearCookie("accessToken", {
     httpOnly: true,
@@ -121,6 +145,7 @@ const refreshToken = catchAsync(async (req: Request, res: Response, next: NextFu
 export const AuthController = {
   register,
   login,
+  socialLogin,
   logout,
   getMe,
   refreshToken

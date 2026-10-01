@@ -48,12 +48,12 @@ const register = async (payload: RegisterInput) => {
     });
   }
 
-//   const token = signToken({ userId: user.id, role: user.role, email: user.email });
+  //   const token = signToken({ userId: user.id, role: user.role, email: user.email });
 
   const { password, ...userWithoutPassword } = user;
 
-  return { user: userWithoutPassword};
-// return user
+  return { user: userWithoutPassword };
+  // return user
 };
 
 const login = async (payload: LoginInput) => {
@@ -73,29 +73,29 @@ const login = async (payload: LoginInput) => {
 
   // const token = signToken({ userId: user.id, role: user.role, email: user.email });
 
-   const jwtPayload = {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        role: user.role
-    }
+  const jwtPayload = {
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    role: user.role
+  }
 
-    const accessToken = jwtUtils.createToken(
-        jwtPayload,
-        config.jwt_access_secret,
-        config.jwt_access_expires_in as SignOptions
-    );
+  const accessToken = jwtUtils.createToken(
+    jwtPayload,
+    config.jwt_access_secret,
+    config.jwt_access_expires_in as SignOptions
+  );
 
-    const refreshToken = jwtUtils.createToken(
-        jwtPayload,
-        config.jwt_refresh_secret,
-        config.jwt_refresh_expires_in as SignOptions
-    );
+  const refreshToken = jwtUtils.createToken(
+    jwtPayload,
+    config.jwt_refresh_secret,
+    config.jwt_refresh_expires_in as SignOptions
+  );
 
-    return {
-        accessToken,
-        refreshToken
-    };
+  return {
+    accessToken,
+    refreshToken
+  };
 
   // const { password, ...userWithoutPassword } = user;
 
@@ -104,59 +104,99 @@ const login = async (payload: LoginInput) => {
 };
 
 
-const getMe = async (userId : number) => {
-    const user = await prisma.user.findUniqueOrThrow({
-        where : {id : userId},
-        omit : {
-            password : true
-        },
-        include : {
-            technicianProfile : true
-        }
-    });
+const socialLogin = async (payload: { email: string; name: string; provider: string }) => {
+  let user = await prisma.user.findUnique({ where: { email: payload.email } });
 
-    return user;
+  if (!user) {
+    const randomPassword = await bcrypt.hash(Math.random().toString(36), 10);
+    user = await prisma.user.create({
+      data: {
+        name: payload.name,
+        email: payload.email,
+        password: randomPassword,
+        role: 'CUSTOMER', // social login defaults to customer
+      },
+    });
+  }
+
+  const jwtPayload = {
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    role: user.role,
+  };
+
+  const accessToken = jwtUtils.createToken(
+    jwtPayload,
+    config.jwt_access_secret,
+    config.jwt_access_expires_in as SignOptions
+  );
+
+  const refreshToken = jwtUtils.createToken(
+    jwtPayload,
+    config.jwt_refresh_secret,
+    config.jwt_refresh_expires_in as SignOptions
+  );
+
+  return { accessToken, refreshToken, user };
+};
+
+
+
+const getMe = async (userId: number) => {
+  const user = await prisma.user.findUniqueOrThrow({
+    where: { id: userId },
+    omit: {
+      password: true
+    },
+    include: {
+      technicianProfile: true
+    }
+  });
+
+  return user;
 }
 
-const refreshToken = async (refreshToken : string) => {
-    const verifiedRefreshToken = jwtUtils.verifyToken(refreshToken, config.jwt_refresh_secret);
+const refreshToken = async (refreshToken: string) => {
+  const verifiedRefreshToken = jwtUtils.verifyToken(refreshToken, config.jwt_refresh_secret);
 
-    if(!verifiedRefreshToken.success){
-        throw new Error(verifiedRefreshToken.error)
+  if (!verifiedRefreshToken.success) {
+    throw new Error(verifiedRefreshToken.error)
+  }
+
+  const { id } = verifiedRefreshToken.data as JwtPayload;
+
+  const user = await prisma.user.findUniqueOrThrow({
+    where: {
+      id
     }
+  })
 
-    const {id} = verifiedRefreshToken.data as JwtPayload;
+  if (user.status === "BANNED") {
+    throw new Error("User is banned!")
+  }
 
-    const user = await prisma.user.findUniqueOrThrow({
-        where : {
-            id
-        }
-    })
-
-    if(user.status === "BANNED"){
-        throw new Error("User is banned!")
-    }
-
-    const jwtPayload = {
-        id,
-        name : user.name,
-        email : user.email,
-        role : user.role
-    }
+  const jwtPayload = {
+    id,
+    name: user.name,
+    email: user.email,
+    role: user.role
+  }
 
 
-    const accessToken = jwtUtils.createToken(
-        jwtPayload,
-        config.jwt_access_secret,
-        config.jwt_access_expires_in as SignOptions
-    );
+  const accessToken = jwtUtils.createToken(
+    jwtPayload,
+    config.jwt_access_secret,
+    config.jwt_access_expires_in as SignOptions
+  );
 
-    return {accessToken}
+  return { accessToken }
 }
 
 export const AuthService = {
   register,
   login,
+  socialLogin,
   getMe,
   refreshToken
 };
